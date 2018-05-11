@@ -504,31 +504,6 @@ setup_stack (void **esp,int argc, char **argv)
       if (success){
         // set size of stack here
         *esp = PHYS_BASE;
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~	
-  char *save_ptr;
-  char *token;
-  char **argve = malloc(2*sizeof(char *));
-  int i, argce = 0, argve_size = 2;
-
-  // Push args onto stack
-  for (token = (char *) testName; token != NULL;
-       token = strtok_r (NULL, " ", save_ptr))
-    {
-      *esp -= strlen(token) + 1;
-      argve[argce] = *esp;
-      argce++;
-      // Resize argv
-      if (argc >= argve_size)
-	{
-	  argve_size *= 2;
-	  argve = realloc(argve, argve_size*sizeof(char *));
-	}
-      memcpy(*esp, token, strlen(token) + 1);
-    }
-
-
-//````````````````````````````````````````````````````````````````````
-/*
 	int i = argc;
         for(int i=(argc-1); i>=0; i--)
         {
@@ -536,18 +511,11 @@ setup_stack (void **esp,int argc, char **argv)
           vData[i] = (uint32_t *)*esp;
           memcpy(*esp,argv[i],strlen(argv[i])+1);
         }
-        i=argc;
-	while( --i >= 0)
-        {
-          *esp = *esp - 4;//32bit
-          (*(uint32_t **)(*esp)) = vData[i];
-        }
 	*esp -= sizeof(int);
 	memcpy(*esp, &argc, sizeof(int));
 	// Push fake return addr
  	*esp -= sizeof(void *);
  	memcpy(*esp, &argv[argc], sizeof(void *));
-*/
     }
       else
       palloc_free_page (kpage);
