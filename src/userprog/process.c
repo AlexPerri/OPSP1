@@ -15,6 +15,7 @@
 #include "threads/init.h"
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
+#include "threads/synch.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
@@ -29,8 +30,10 @@ tid_t
 process_execute (const char *file_name) 
 {
   char *fn_copy;
-  tid_t tid;
-
+  //trying to get load to run
+  // char * save_ptr;
+  // char * file_name_solo = strtok_r((char *)file_name, " ", &save_ptr);
+  tid_t tid;  //printf("%s","Execute was run for this program!!!\n");
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
@@ -39,6 +42,7 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
+  // changed to file name solo to just put name ie echo
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
@@ -50,10 +54,10 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
+  printf("%s","HITTING START PROCESS\n");
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
-
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -86,8 +90,12 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
+ // struct lock bWait;
+ // lock_init(&bWait);
+  while(1){
+  }
   return -1;
 }
 
@@ -195,7 +203,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, int argc, char **argv);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -208,24 +216,58 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
+  char *nameKeeper = file_name;
+  printf("%s"," Entered load\n");
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
   off_t file_ofs;
   bool success = false;
   int i;
+  printf("%s","File name in load is: ");
+  printf("%s",nameKeeper);
+  printf("%s","\n");
+
+  /*
+  Tried passing in filesname but it got lost, passing in
+  separate argc arg v works instead for setup stack
+  */
+  char* argv[30];// random number for now change later
+  int argc=0;// argument count
+  char*token,*save_ptr;
+  char* fakePointer ="begin";
+  printf("%s", "Stack should be: \n");
+  printf("%s\n",fakePointer);
+  for(token = strtok_r((char*)file_name," ",&save_ptr);token!= NULL;
+  token = strtok_r (NULL, " ",&save_ptr)){
+    argv[argc]=token;
+    printf("Argv = %s\n", argv[argc]);
+    argc++;
+  }
+  printf("Argc = %d\n", argc);
+
+  printf("%s","File name 2: ");
+  printf("%s",file_name);
+  printf("%s","\n");
+
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
+  //ADDED THIS TO JUST GET EXECUTABLE NAME
+  //char *headFile,*save_ptr;
 
+  //headFile = strtok_r(file_name," ",&save_ptr);
   /* Open executable file. */
-  file = filesys_open (file_name);
+  //printf("%s","Attempting to open file\n");
+  //printf("%s", headFile);
+  //printf("%s", ": being loaded into file\n");
+  file = filesys_open (argv[0]);
   if (file == NULL) 
     {
-      printf ("load: %s: open failed\n", file_name);
+      printf ("load: %s: open failed\n", argv[0]);
       goto done; 
     }
 
@@ -238,7 +280,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
       || ehdr.e_phnum > 1024) 
     {
-      printf ("load: %s: error loading executable\n", file_name);
+	/*
+	Error was not compiling examples
+	*/
+      printf ("load: %s: error loading executable\n", argv[0]);
       goto done; 
     }
 
@@ -300,9 +345,18 @@ load (const char *file_name, void (**eip) (void), void **esp)
           break;
         }
     }
+  //printf("%s","File name at setupstack is: ");
+  //printf("%s",file_name);
+  //printf("%s","\n");
 
+  printf("%s","SETUPSTACKREACHED\n");
   /* Set up stack. */
-  if (!setup_stack (esp))
+  printf("%s","File name in setupstack is: ");
+  printf("%s",nameKeeper);
+  printf("%s","\n");
+
+
+  if (!setup_stack (esp, argc, argv))
     goto done;
 
   /* Start address. */
@@ -427,20 +481,78 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp,int argc, char **argv) 
 {
+  //printf("%s","File name in actual setupstack  is: ");
+  //printf("%s",file_name);
+  //printf("%s","\n");
+  printf("%d", argc);
+  for(int x=0; x<argc;x++){
+    printf("%s", argv[x]);
+  }
+  printf("%s","\n");
+
   uint8_t *kpage;
   bool success = false;
-
+  int decCounter = argc;
+  char* testName = "echo x"; 
+  uint32_t * vData[argc];  
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
-    {
+  {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
+      if (success){
+        // set size of stack here
         *esp = PHYS_BASE;
-      else
-        palloc_free_page (kpage);
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~	
+  char *save_ptr;
+  char *token;
+  char **argve = malloc(2*sizeof(char *));
+  int i, argce = 0, argve_size = 2;
+
+  // Push args onto stack
+  for (token = (char *) testName; token != NULL;
+       token = strtok_r (NULL, " ", save_ptr))
+    {
+      *esp -= strlen(token) + 1;
+      argve[argce] = *esp;
+      argce++;
+      // Resize argv
+      if (argc >= argve_size)
+	{
+	  argve_size *= 2;
+	  argve = realloc(argve, argve_size*sizeof(char *));
+	}
+      memcpy(*esp, token, strlen(token) + 1);
     }
+
+
+//````````````````````````````````````````````````````````````````````
+/*
+	int i = argc;
+        for(int i=(argc-1); i>=0; i--)
+        {
+          *esp = *esp - (strlen(argv[i])+1)*sizeof(char);
+          vData[i] = (uint32_t *)*esp;
+          memcpy(*esp,argv[i],strlen(argv[i])+1);
+        }
+        i=argc;
+	while( --i >= 0)
+        {
+          *esp = *esp - 4;//32bit
+          (*(uint32_t **)(*esp)) = vData[i];
+        }
+	*esp -= sizeof(int);
+	memcpy(*esp, &argc, sizeof(int));
+	// Push fake return addr
+ 	*esp -= sizeof(void *);
+ 	memcpy(*esp, &argv[argc], sizeof(void *));
+*/
+    }
+      else
+      palloc_free_page (kpage);
+   }
+  hex_dump(PHYS_BASE - 128, PHYS_BASE - 128, 128, true);
   return success;
 }
 
