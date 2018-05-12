@@ -494,9 +494,9 @@ setup_stack (void **esp,int argc, char **argv)
 
   uint8_t *kpage;
   bool success = false;
-  int decCounter = argc;
   char* testName = "echo x"; 
-  uint32_t * vData[argc];  
+  int *vData[argc];
+  int i;
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
   {
@@ -504,22 +504,64 @@ setup_stack (void **esp,int argc, char **argv)
       if (success){
         // set size of stack here
         *esp = PHYS_BASE;
+	/*
 	int i = argc;
+	//x echo
         for(int i=(argc-1); i>=0; i--)
         {
           *esp = *esp - (strlen(argv[i])+1)*sizeof(char);
-          vData[i] = (uint32_t *)*esp;
+	  vData[i] = (uint32_t *)*esp;
           memcpy(*esp,argv[i],strlen(argv[i])+1);
-        }
-	*esp -= sizeof(int);
-	memcpy(*esp, &argc, sizeof(int));
-	// Push fake return addr
- 	*esp -= sizeof(void *);
- 	memcpy(*esp, &argv[argc], sizeof(void *));
-    }
+	}
+	*/
+/*
+ // Push argc
+  *esp -= sizeof(int);
+  memcpy(*esp, &argc, sizeof(int));
+  // Push fake return addr
+  *esp -= sizeof(void *);
+  memcpy(*esp, &argv[argc], sizeof(void *));
+*/
+  	}
       else
       palloc_free_page (kpage);
    }
+   //x echo
+   for(i=(argc-1); i>=0; i--)
+   {
+     *esp = *esp - (strlen(argv[i])+1);
+     memcpy(*esp,argv[i],strlen(argv[i])+1);
+     vData[i] = *esp;
+   }
+     while((int)*esp%4!=0)
+  {
+    *esp-=sizeof(char);
+    char x = 0;
+    memcpy(*esp,&x,sizeof(char));
+  }
+
+  int zero = 0;
+
+  *esp-=sizeof(int);
+  memcpy(*esp,&zero,sizeof(int));
+  for(i=(argc-1);i>=0;i--)
+  {
+    *esp-=sizeof(int);
+    memcpy(*esp,&vData[i],sizeof(int));
+  }
+
+  int pt = *esp;
+  *esp-=sizeof(int);
+  memcpy(*esp,&pt,sizeof(int));
+
+  *esp-=sizeof(int);
+  memcpy(*esp,&argc,sizeof(int));
+
+  *esp-=sizeof(int);
+  memcpy(*esp,&zero,sizeof(int));
+
+  
+
   hex_dump(PHYS_BASE - 128, PHYS_BASE - 128, 128, true);
   return success;
 }
