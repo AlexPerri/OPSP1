@@ -104,7 +104,8 @@ struct thread
     /*********************************************************/
     /************SYSCALL STUFF*************************/
     struct lock sysLock;
-    struct list fileL;
+    struct list file_descriptor;
+    int cur_fd;
     /***********///
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
