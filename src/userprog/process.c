@@ -21,6 +21,10 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+static void threadCheck (struct thread *t);
+static struct thread *matched;
+static tid_t cTid;
+
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -30,6 +34,8 @@ tid_t
 process_execute (const char *file_name) 
 {
   char *fn_copy;
+  struct thread *cur = thread_current ();
+  char *save_ptr,*tempName;
   //trying to get load to run
   // char * save_ptr;
   // char * file_name_solo = strtok_r((char *)file_name, " ", &save_ptr);
@@ -40,12 +46,25 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
+  tempName = strtok_r (file_name," ",&save_ptr);
 
   /* Create a new thread to execute FILE_NAME. */
   // changed to file name solo to just put name ie echo
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+  tid = thread_create (tempName, PRI_DEFAULT, start_process, fn_copy);
+
+  if (tid == TID_ERROR){
+    palloc_free_page (fn_copy);
+  }
+
+  else{
+   // making list of children for  current thread.
+    cTid=tid;
+    enum intr_level old_level = intr_disable ();
+    thread_foreach(*threadCheck, NULL);
+    list_push_front(&cur->children,&matched->celem);
+    intr_set_level (old_level);
+  }
+ 
   return tid;
 }
 
@@ -54,7 +73,7 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
-  printf("%s","HITTING START PROCESS\n");
+ // printf("%s","HITTING START PROCESS\n");
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
@@ -92,11 +111,34 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid) 
 {
- // struct lock bWait;
- // lock_init(&bWait);
-  while(1){
+ struct thread *cur = thread_current ();
+ struct thread *theChild = NULL;
+ struct list_elem *scan;
+//empty list means no need to wait
+  if(list_empty(&cur->children))
+  {
+    return -1;
   }
-  return -1;
+  //list traversal
+  for (scan = list_front(&cur->children); scan != NULL; scan = scan->next)
+  {   // compare childlist locations tid to the child tid
+      if (list_entry (scan, struct thread, celem)->tid == child_tid)
+      {
+	// youre the baby daddy
+       theChild = list_entry (scan, struct thread, celem);
+      }
+  }
+  //child visited already
+  list_remove(&theChild->celem);
+  // Youre not the father
+  if(theChild == NULL)
+  {
+    return -1;
+  }
+  else{
+    sema_down(&theChild->hold);
+    return theChild->exitNum;
+  }
 }
 
 /* Free the current process's resources. */
@@ -105,7 +147,10 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  //unlocking parent;
+  sema_up(&cur->hold);
 
+  printf("%s: exit(%d)\n",cur->name,cur->exitNum);
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -217,16 +262,16 @@ bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
   char *nameKeeper = file_name;
-  printf("%s"," Entered load\n");
+  //printf("%s"," Entered load\n");
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
   off_t file_ofs;
   bool success = false;
   int i;
-  printf("%s","File name in load is: ");
-  printf("%s",nameKeeper);
-  printf("%s","\n");
+  //printf("%s","File name in load is: ");
+  //printf("%s",nameKeeper);
+  //printf("%s","\n");
 
   /*
   Tried passing in filesname but it got lost, passing in
@@ -236,19 +281,19 @@ load (const char *file_name, void (**eip) (void), void **esp)
   int argc=0;// argument count
   char*token,*save_ptr;
   char* fakePointer ="begin";
-  printf("%s", "Stack should be: \n");
-  printf("%s\n",fakePointer);
+  //printf("%s", "Stack should be: \n");
+  //printf("%s\n",fakePointer);
   for(token = strtok_r((char*)file_name," ",&save_ptr);token!= NULL;
   token = strtok_r (NULL, " ",&save_ptr)){
     argv[argc]=token;
-    printf("Argv = %s\n", argv[argc]);
+    //printf("Argv = %s\n", argv[argc]);
     argc++;
   }
-  printf("Argc = %d\n", argc);
+  //printf("Argc = %d\n", argc);
 
-  printf("%s","File name 2: ");
-  printf("%s",file_name);
-  printf("%s","\n");
+  //printf("%s","File name 2: ");
+  //printf("%s",file_name);
+  //printf("%s","\n");
 
 
   /* Allocate and activate page directory. */
@@ -349,11 +394,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
   //printf("%s",file_name);
   //printf("%s","\n");
 
-  printf("%s","SETUPSTACKREACHED\n");
+  //printf("%s","SETUPSTACKREACHED\n");
   /* Set up stack. */
-  printf("%s","File name in setupstack is: ");
-  printf("%s",nameKeeper);
-  printf("%s","\n");
+  //printf("%s","File name in setupstack is: ");
+  //printf("%s",nameKeeper);
+  //printf("%s","\n");
 
 
   if (!setup_stack (esp, argc, argv))
@@ -486,22 +531,27 @@ setup_stack (void **esp,int argc, char **argv)
   //printf("%s","File name in actual setupstack  is: ");
   //printf("%s",file_name);
   //printf("%s","\n");
-  printf("%d", argc);
+  //printf("%d", argc);
   for(int x=0; x<argc;x++){
-    printf("%s", argv[x]);
+    //printf("%s", argv[x]);
   }
-  printf("%s","\n");
+  //printf("%s","\n");
 
   uint8_t *kpage;
   bool success = false;
   char* testName = "echo x"; 
   int *vData[argc];
   int i;
+  char filler = 0;
+  int argvLoc;
+  int sentinel = 0;
+  int fakeNode =0;
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
   {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success){
+      if (success)
+      {
         // set size of stack here
         *esp = PHYS_BASE;
 	/*
@@ -514,56 +564,50 @@ setup_stack (void **esp,int argc, char **argv)
           memcpy(*esp,argv[i],strlen(argv[i])+1);
 	}
 	*/
-/*
- // Push argc
-  *esp -= sizeof(int);
-  memcpy(*esp, &argc, sizeof(int));
-  // Push fake return addr
-  *esp -= sizeof(void *);
-  memcpy(*esp, &argv[argc], sizeof(void *));
-*/
-  	}
+
+	//stack x echo
+   	for(i=(argc-1); i>=0; i--)
+   	{
+     	  *esp = *esp - (strlen(argv[i])+1);
+     	  memcpy(*esp,argv[i],strlen(argv[i])+1);
+     	  vData[i] = *esp;
+   	}
+
+   	//4kb
+   	while((int)*esp%4!=0)
+   	{
+     	  *esp=*esp-sizeof(char);
+     	  memcpy(*esp,&filler,sizeof(char));
+   	}
+   	//stack sentinel node 0 x echo
+   	*esp= *esp-sizeof(int);
+   	memcpy(*esp,&sentinel,sizeof(int));
+
+  	//stack argv[i] 0 x echo
+   	for(i=(argc-1);i>=0;i--)
+   	{
+     	  *esp= *esp-sizeof(int);
+     	  memcpy(*esp,&vData[i],sizeof(int));
+   	}
+
+    	// stack  argv argv[i] 0 x echo
+   	argvLoc = *esp;
+   	*esp= *esp-sizeof(int);
+   	memcpy(*esp,&argvLoc,sizeof(int));
+
+   	//stack argc argv argv[i] 0 x echo
+   	*esp= *esp-sizeof(int);
+   	memcpy(*esp,&argc,sizeof(int));
+
+   	//stack 0 argc argv argv[i] 0 x echo
+   	*esp= *esp-sizeof(int);
+   	memcpy(*esp,&fakeNode,sizeof(int));
+      }
       else
       palloc_free_page (kpage);
    }
-   //x echo
-   for(i=(argc-1); i>=0; i--)
-   {
-     *esp = *esp - (strlen(argv[i])+1);
-     memcpy(*esp,argv[i],strlen(argv[i])+1);
-     vData[i] = *esp;
-   }
-     while((int)*esp%4!=0)
-  {
-    *esp-=sizeof(char);
-    char x = 0;
-    memcpy(*esp,&x,sizeof(char));
-  }
-
-  int zero = 0;
-
-  *esp-=sizeof(int);
-  memcpy(*esp,&zero,sizeof(int));
-  for(i=(argc-1);i>=0;i--)
-  {
-    *esp-=sizeof(int);
-    memcpy(*esp,&vData[i],sizeof(int));
-  }
-
-  int pt = *esp;
-  *esp-=sizeof(int);
-  memcpy(*esp,&pt,sizeof(int));
-
-  *esp-=sizeof(int);
-  memcpy(*esp,&argc,sizeof(int));
-
-  *esp-=sizeof(int);
-  memcpy(*esp,&zero,sizeof(int));
-
-  
-
-  hex_dump(PHYS_BASE - 128, PHYS_BASE - 128, 128, true);
-  return success;
+  // hex_dump(PHYS_BASE - 128, PHYS_BASE - 128, 128, true);
+   return success;
 }
 
 /* Adds a mapping from user virtual address UPAGE to kernel
@@ -584,4 +628,11 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+static void threadCheck (struct thread *t)
+{
+  if(cTid == t->tid)
+  {
+    matched = t;
+  }
 }
