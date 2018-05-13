@@ -24,12 +24,17 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
+  int fd ;
+  void *buffer;
+  unsigned size;
+
   switch(*(int *) f->esp) {
       case SYS_HALT :
          printf("Tries to halt\n " );
          break;
       case SYS_EXIT :
-         printf("Tries to exit\n " );
+         fd = *(int *)(f->esp + 4);
+         exit(fd);
          break;
       case SYS_EXEC :
          printf("Tries to exec\n" );
@@ -54,11 +59,11 @@ syscall_handler (struct intr_frame *f UNUSED)
          break;
 
        case SYS_WRITE :
-         printf("Tries to write \n " );
-	 int fd = *(int *)(f->esp + 4);
-	 void *buffer = *(char **)(f->esp + 8);
-	 unsigned size = *(unsigned *)(f->esp + 12);
-         f->eax = write (fd, buffer, size);
+        // printf("Tries to write \n " );
+	 fd = *(int *)(f->esp + 4);
+	 buffer = *(char **)(f->esp + 8);
+	 size = *(unsigned *)(f->esp + 12);
+         f->eax = write (fd, buffer,size);
 
 	 break;
        case SYS_SEEK :
@@ -72,17 +77,17 @@ syscall_handler (struct intr_frame *f UNUSED)
          break;
 
       default :
-         printf("Invalid grade\n" );
+         printf("Invalid Input\n" );
    }
 
-  printf ("%d",*(int *) f->esp);
-  printf ("system call!\n");
-  thread_exit ();
+ // printf ("%d",*(int *) f->esp);
+ // printf ("system call!\n");
+ // thread_exit ();
 }
 
 int write (int fd, const void *buffer, unsigned size)
 {
-  printf("made it to write function");
+ // printf("Made it to write function\n");
   struct thread *cur = thread_current ();
   struct list_elem *e;
   lock_acquire(&procLock);
@@ -90,7 +95,8 @@ int write (int fd, const void *buffer, unsigned size)
   // Check if stdout(1)
   if (fd == 1)
   {
-    printf("Ran part 1\n");
+  // printf("Ran part putbuf, size was:  \n");
+   // printf("%d\n",(int)size);
     putbuf((char * )buffer, (size_t) size);
     lock_release(&procLock);
     return (int) size;
@@ -99,7 +105,7 @@ int write (int fd, const void *buffer, unsigned size)
   // Check if there is nothing there or for stdin(0)
   if (fd == 0 || list_empty(&cur->file_descriptor))
   {
-    printf("Ran part 2\n");
+   // printf("Ran part 2\n");
     lock_release(&procLock);
     return 0;
   }
@@ -111,7 +117,7 @@ int write (int fd, const void *buffer, unsigned size)
     if (temp->descriptor == fd)
     {
       int written_size  = (int) file_write (temp->f, buffer, size);
-      printf("Ran part 3\n");
+     // printf("Ran part 3\n");
       lock_release(&procLock);
       return written_size;
     }
@@ -120,3 +126,9 @@ int write (int fd, const void *buffer, unsigned size)
 
   return 0;
 }
+
+void exit(int exit){
+printf("%s: exit(%d)\n", thread_current()->name, exit);
+thread_exit();
+}
+
