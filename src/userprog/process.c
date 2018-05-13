@@ -149,8 +149,8 @@ process_exit (void)
   uint32_t *pd;
   //unlocking parent;
   sema_up(&cur->hold);
-
-  printf("%s: exit(%d)\n",cur->name,cur->exitNum);
+  //printing exit process as per farshaud
+  printf("%s: exit(%d)\n", cur->name,cur->exitNum);
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -606,7 +606,7 @@ setup_stack (void **esp,int argc, char **argv)
       else
       palloc_free_page (kpage);
    }
-  // hex_dump(PHYS_BASE - 128, PHYS_BASE - 128, 128, true);
+   hex_dump(PHYS_BASE - 128, PHYS_BASE - 128, 128, true);
    return success;
 }
 
